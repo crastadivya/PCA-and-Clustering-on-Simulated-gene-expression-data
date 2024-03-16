@@ -1,0 +1,84 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import multivariate_normal
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+import pandas as pd
+
+# Set a random seed for reproducibility
+np.random.seed(123)
+
+# Define the number of genes (variables) and samples
+num_genes = 6
+num_samples = 150
+num_categories = 3
+
+# Simulate a dataset with three categories
+# Generate data for each category
+category1_data = multivariate_normal(mean=np.zeros(num_genes), cov=np.eye(num_genes)).rvs(size=num_samples // num_categories)
+category2_data = multivariate_normal(mean=2*np.ones(num_genes), cov=np.eye(num_genes)).rvs(size=num_samples // num_categories)
+category3_data = multivariate_normal(mean=-2*np.ones(num_genes), cov=np.eye(num_genes)).rvs(size=num_samples // num_categories)
+
+# Combine the data from the three categories
+simulated_data = np.vstack((category1_data, category2_data, category3_data))
+
+category_labels = np.repeat(np.arange(1, num_categories + 1), repeats=num_samples // num_categories)
+
+simulated_df = pd.DataFrame(simulated_data, columns=[f"gene{i+1}" for i in range(num_genes)])
+simulated_df['category_labels'] = category_labels
+
+# Scatter plot for all pairs of variables
+pd.plotting.scatter_matrix(simulated_df.drop(columns=['category_labels']), c=simulated_df['category_labels'], cmap='viridis', figsize=(10, 10))
+plt.show()
+
+# PCA
+X = simulated_df.drop(columns=['category_labels'])
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+pca = PCA()
+pca_result = pca.fit_transform(X_scaled)
+
+# Scree plot
+plt.plot(np.arange(1, num_genes + 1), pca.explained_variance_ratio_ * 100, marker='o')
+plt.xlabel('Principal Component')
+plt.ylabel('Percentage of Variance Explained')
+plt.title('Scree Plot')
+plt.grid()
+plt.show()
+
+# Scatterplot between PC1 and PC2
+pca_data = pd.DataFrame(pca_result[:, :2], columns=['PC1', 'PC2'])
+pca_data['Category'] = category_labels
+
+plt.figure(figsize=(8, 6))
+for category in np.unique(pca_data['Category']):
+    plt.scatter(pca_data.loc[pca_data['Category'] == category, 'PC1'], 
+                pca_data.loc[pca_data['Category'] == category, 'PC2'], 
+                label=f'Category {category}')
+
+plt.xlabel('Principal Component 1')
+plt.ylabel('Principal Component 2')
+plt.title('PCA Scatter Plot')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Hierarchical clustering
+dist_pca = pdist(pca_data[['PC1', 'PC2']])
+
+Z = linkage(dist_pca, method='average')
+plt.figure(figsize=(10, 6))
+dendrogram(Z, labels=simulated_df['category_labels'].values)
+plt.title('Dendrogram')
+plt.xlabel('Sample Index')
+plt.ylabel('Height')
+plt.show()
+
+# Contingency table
+clusters = fcluster(Z, 3, criterion='maxclust')
+contingency_table = pd.crosstab(simulated_df['category_labels'], clusters, rownames=['True Category'], colnames=['Cluster'])
+print("Contingency table:")
+print(contingency_table)
+
